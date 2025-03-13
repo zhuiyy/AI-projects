@@ -2,6 +2,7 @@
 
 import numpy as np
 from tensorflow.keras.datasets import mnist
+import os
 
 
 class linear:
@@ -176,6 +177,16 @@ class MLP:
             print(f'Epoch {e+1}/{epoch} | Loss: {epochloss/num_samples:.4f}')
 
     def save(self, filename):
+        # 获取当前模块所在目录路径
+        module_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # 拼接完整保存路径
+        save_path = os.path.join(module_dir, filename)
+
+        # 创建目录(如果不存在)
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+        # 原有收集参数的逻辑
         weights = []
         biases = []
         current = self.head
@@ -184,16 +195,27 @@ class MLP:
                 weights.append(current.linear.weights)
                 biases.append(current.linear.bias)
             current = current.next
+
+        # 保存到模块目录
         np.savez(
-            filename,
+            save_path,
             weights=np.array(weights, dtype=object),
             biases=np.array(biases, dtype=object),
         )
 
     def load(self, filename):
-        data = np.load(filename, allow_pickle=True)
+        # 获取当前模块所在目录路径
+        module_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # 拼接完整加载路径
+        load_path = os.path.join(module_dir, filename)
+
+        # 加载数据
+        data = np.load(load_path, allow_pickle=True)
         weights = data['weights']
         biases = data['biases']
+
+        # 恢复参数的逻辑
         current = self.head
         i = 0
         while current:
@@ -202,7 +224,6 @@ class MLP:
                 current.linear.bias = biases[i]
                 i += 1
             current = current.next
-
 
 if __name__ == '__main__':
 
