@@ -13,12 +13,12 @@ class linear:
         self.x = x
         return np.dot(x, self.weights)+self.bias
 
-    def backward(self, pdvalue, steps):
+    def backward(self, pdvalue, steps, regular):
         self.pdvalue = np.dot(pdvalue, self.weights.T)
         self.pdweights = np.dot(self.x.T, pdvalue)
         self.pdbias = np.sum(pdvalue, axis=0)
-        self.weights -= steps*self.pdweights+0.00005*self.weights
-        self.bias -= steps*self.pdbias+0.00005*self.bias
+        self.weights -= steps*self.pdweights+regular*self.weights
+        self.bias -= steps*self.pdbias+regular*self.bias
         return self.pdvalue
 
 def relu(x):
@@ -70,8 +70,8 @@ class midLayer:
         self.x = x
         return self.activator.forward(self.linear.forward(x))
 
-    def backward(self, pdvalue, steps):
-        return self.linear.backward(self.activator.backward(pdvalue), steps)
+    def backward(self, pdvalue, steps, regualr):
+        return self.linear.backward(self.activator.backward(pdvalue), steps, regualr)
 
 def softmax(x):
     x = x-np.max(x, axis=1, keepdims=True)
@@ -93,7 +93,7 @@ class outputLayer:
         self.x = x
         return self.func(x)
 
-    def backward(self, y_true, steps):
+    def backward(self, y_true, steps = None, regular = None):
         y_pred = softmax(self.x)
         batch_size = y_true.shape[0]
         return (y_pred-y_true)/batch_size
@@ -127,15 +127,16 @@ class MLP:
             current = current.next
         return x
 
-    def backward(self, x, steps):
+    def backward(self, x, steps, regular):
         current = self.tail
         while current:
-            x = current.backward(x, steps)
+            x = current.backward(x, steps, regular)
             current = current.pre
         return x
 
-    def train(self, datax, datay, batch_size, num_samples, epoch, steps, losstype = 'computeLoss'):
+    def train(self, datax, datay, batch_size, num_samples, epoch, steps, regular = 0.0005, losstype = 'computeLoss'):
         self.steps = steps
+        self.regualr = regular
         datax = np.array(datax)
         datay = np.array(datay)
         for e in range(epoch):
@@ -150,7 +151,7 @@ class MLP:
                 if losstype == 'computeLoss':
                     loss = computeLoss(y, y_pred)
                     epochloss += loss*x.shape[0]
-                self.backward(y, self.steps)
+                self.backward(y, self.steps, self.regualr)
             print(f"Epoch {e+1}/{epoch} | Loss: {epochloss/num_samples:.4f}")
 
     def save(self, filename):
@@ -197,8 +198,9 @@ if __name__ == '__main__':
     epochs = 10
     learning_rate = 0.1
     num_samples = x_train.shape[0]
+    regular = 0.00005
 
-    mlp.train(x_train, y_train_onehot, batch_size, num_samples, epochs, learning_rate)
+    mlp.train(x_train, y_train_onehot, batch_size, num_samples, epochs, learning_rate, regular)
 
     mlp.save("mlp_model.npz")
     print("模型已保存。")
