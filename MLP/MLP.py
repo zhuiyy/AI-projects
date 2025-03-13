@@ -162,7 +162,6 @@ class MLP:
                 weights.append(current.linear.weights)
                 biases.append(current.linear.bias)
             current = current.next
-        # 转换为对象数组保存不同形状的数组
         np.savez(filename, weights=np.array(weights, dtype=object), biases=np.array(biases, dtype=object))
 
 
@@ -185,38 +184,30 @@ if __name__ == '__main__':
         one_hot = np.zeros((len(y), num_classes))
         one_hot[np.arange(len(y)), y] = 1
         return one_hot
-    # 加载 MNIST 数据
     (x_train, y_train), (x_test, y_test) = mnist.load_data()
-    # 数据预处理：扁平化、归一化
     x_train = x_train.reshape(-1, 784) / 255.0
     x_test = x_test.reshape(-1, 784) / 255.0
-    # one-hot 编码标签
     y_train_onehot = one_hot_encode(y_train, 10)
     y_test_onehot = one_hot_encode(y_test, 10)
 
-    # 构造网络：784 -> 128 -> 64 -> 10
-    # tp 列表的长度为 len(units)+2，即 2+2=4，对应各层的激活函数依次为：第一层使用 'relu'，第二层使用 'relu'，第三层（线性变换层）使用 'linear'，最后输出层使用 'softmax'
+
     mlp = MLP(784, 10, [128, 64], ['relu', 'relu', 'linear', 'softmax'])
 
-    # 训练参数
     batch_size = 64
     epochs = 10
     learning_rate = 0.1
     num_samples = x_train.shape[0]
 
-    # 开始训练
     mlp.train(x_train, y_train_onehot, batch_size, num_samples, epochs, learning_rate)
 
-    # 保存模型
     mlp.save("mlp_model.npz")
     print("模型已保存。")
 
-    # 模拟加载模型：新建一个同样结构的网络，然后加载参数
+
     mlp_loaded = MLP(784, 10, [128, 64], ['relu', 'relu', 'linear', 'softmax'])
     mlp_loaded.load("mlp_model.npz")
     print("模型已加载。")
 
-    # 在测试集上评估
     y_test_pred = mlp_loaded.forward(x_test)
     y_test_labels = np.argmax(y_test_pred, axis=1)
     accuracy = np.mean(y_test_labels == y_test)
