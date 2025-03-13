@@ -36,25 +36,25 @@ def sigmoid(x):
 
 class activator:
 
-    def __init__(self, tp="relu"):
+    def __init__(self, tp='relu'):
         self.type = tp
         self.next = None
         self.pre = None
 
     def func(self, x):
-        if self.type == "relu":
+        if self.type == 'relu':
             return relu(x)
-        if self.type == "sigmoid":
+        if self.type == 'sigmoid':
             return sigmoid(x)
-        if self.type == "linear":
+        if self.type == 'linear':
             return x
 
     def pd(self, x):
-        if self.type == "relu":
+        if self.type == 'relu':
             return np.where(x > 0, 1, 0)
-        if self.type == "sigmoid":
+        if self.type == 'sigmoid':
             return sigmoid(x) * (1 - sigmoid(x))
-        if self.type == "linear":
+        if self.type == 'linear':
             return np.ones_like(x)
 
     def forward(self, x):
@@ -68,7 +68,7 @@ class activator:
 
 class midLayer:
 
-    def __init__(self, in_size, out_size, tp="relu"):
+    def __init__(self, in_size, out_size, tp='relu'):
         self.linear = linear(in_size, out_size)
         self.activator = activator(tp)
         self.next = None
@@ -90,13 +90,13 @@ def softmax(x):
 
 class outputLayer:
 
-    def __init__(self, tp="softmax"):
+    def __init__(self, tp='softmax'):
         self.next = None
         self.pre = None
         self.type = tp
 
     def func(self, x):
-        if self.type == "softmax":
+        if self.type == 'softmax':
             return softmax(x)
 
     def forward(self, x):
@@ -155,7 +155,7 @@ class MLP:
         epoch,
         steps,
         regular=0.0005,
-        losstype="computeLoss",
+        losstype='computeLoss',
     ):
         self.steps = steps
         self.regualr = regular
@@ -170,11 +170,11 @@ class MLP:
                 x = datax_shuffled[i : i + batch_size]
                 y = datay_shuffled[i : i + batch_size]
                 y_pred = self.forward(x)
-                if losstype == "computeLoss":
+                if losstype == 'computeLoss':
                     loss = computeLoss(y, y_pred)
                     epochloss += loss * x.shape[0]
                 self.backward(y, self.steps, self.regualr)
-            print(f"Epoch {e+1}/{epoch} | Loss: {epochloss/num_samples:.4f}")
+            print(f'Epoch {e+1}/{epoch} | Loss: {epochloss/num_samples:.4f}')
 
     def save(self, filename):
         module_dir = os.path.dirname(os.path.abspath(__file__))
@@ -187,7 +187,7 @@ class MLP:
         biases = []
         current = self.head
         while current:
-            if hasattr(current, "linear"):
+            if hasattr(current, 'linear'):
                 weights.append(current.linear.weights)
                 biases.append(current.linear.bias)
             current = current.next
@@ -204,20 +204,20 @@ class MLP:
         load_path = os.path.join(module_dir, filename)
 
         data = np.load(load_path, allow_pickle=True)
-        weights = data["weights"]
-        biases = data["biases"]
+        weights = data['weights']
+        biases = data['biases']
 
         current = self.head
         i = 0
         while current:
-            if hasattr(current, "linear"):
+            if hasattr(current, 'linear'):
                 current.linear.weights = weights[i]
                 current.linear.bias = biases[i]
                 i += 1
             current = current.next
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
 
     def one_hot_encode(y, num_classes):
         one_hot = np.zeros((len(y), num_classes))
@@ -230,7 +230,7 @@ if __name__ == "__main__":
     y_train_onehot = one_hot_encode(y_train, 10)
     y_test_onehot = one_hot_encode(y_test, 10)
 
-    mlp = MLP(784, 10, [128, 64], ["relu", "relu", "linear", "softmax"])
+    mlp = MLP(784, 10, [128, 64], ['relu', 'relu', 'linear', 'softmax'])
 
     batch_size = 64
     epochs = 10
@@ -242,14 +242,14 @@ if __name__ == "__main__":
         x_train, y_train_onehot, batch_size, num_samples, epochs, learning_rate, regular
     )
 
-    mlp.save("mlp_model.npz")
-    print("模型已保存。")
+    mlp.save('mlp_model.npz')
+    print('模型已保存。')
 
-    mlp_loaded = MLP(784, 10, [128, 64], ["relu", "relu", "linear", "softmax"])
-    mlp_loaded.load("mlp_model.npz")
-    print("模型已加载。")
+    mlp_loaded = MLP(784, 10, [128, 64], ['relu', 'relu', 'linear', 'softmax'])
+    mlp_loaded.load('mlp_model.npz')
+    print('模型已加载。')
 
     y_test_pred = mlp_loaded.forward(x_test)
     y_test_labels = np.argmax(y_test_pred, axis=1)
     accuracy = np.mean(y_test_labels == y_test)
-    print(f"测试准确率：{accuracy * 100:.2f}%")
+    print(f'测试准确率：{accuracy * 100:.2f}%')
