@@ -1,4 +1,7 @@
 # -*-coding:utf-8-*-
+'''
+@ author: Zhuiy
+'''
 
 import numpy as np
 from tensorflow.keras.datasets import mnist
@@ -30,38 +33,42 @@ def relu(x):
     return np.maximum(0, x)
 
 
+def relupd(x):
+    return np.where(x <= 0, 0, 1)
+
+
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
 
+def sigmoidpd(x):
+    return sigmoid(x) * (1 - sigmoid(x))
+
+
 class activator:
+    Atype = {'relu': relu, 'sigmoid': sigmoid, 'linear': (lambda x: x)}
+
+    Apdtype = {'relu': relupd, 'sigmoid': sigmoidpd, 'linear': lambda x: 1}
 
     def __init__(self, tp='relu'):
         self.type = tp
         self.next = None
         self.pre = None
-
-    def func(self, x):
-        if self.type == 'relu':
-            return relu(x)
-        if self.type == 'sigmoid':
-            return sigmoid(x)
-        if self.type == 'linear':
-            return x
-
-    def pd(self, x):
-        if self.type == 'relu':
-            return np.where(x > 0, 1, 0)
-        if self.type == 'sigmoid':
-            return sigmoid(x) * (1 - sigmoid(x))
-        if self.type == 'linear':
-            return np.ones_like(x)
+        self.func = self.Atype[self.type]
+        self.pd = self.Apdtype[self.type]
 
     def forward(self, x):
         self.x = x
-        return self.func(x)
+        self.sigmoidx = None
+        k = self.func(x)
+        if self.type == 'sigmoid':
+            self.sigmoidx = k
+        return k
 
     def backward(self, pdvalue):
+        if self.type == 'sigmoid':
+            self.pdvalue = pdvalue * self.sigmoidx * (1 - self.sigmoidx)
+            return self.pdvalue
         self.pdvalue = pdvalue * self.pd(self.x)
         return self.pdvalue
 
@@ -89,15 +96,15 @@ def softmax(x):
 
 
 class outputLayer:
+    Otype = {'softmax': softmax}
 
+    # Opdtype = {'softmax' : softmaxpd} 因为本项目只是用softmax + computeloss输出，所以可以联合计算梯度，故不再细分类
     def __init__(self, tp='softmax'):
         self.next = None
         self.pre = None
         self.type = tp
-
-    def func(self, x):
-        if self.type == 'softmax':
-            return softmax(x)
+        self.func = self.Otype[self.type]
+        # self.pd = self.Opdtype[self.type]
 
     def forward(self, x):
         self.x = x
