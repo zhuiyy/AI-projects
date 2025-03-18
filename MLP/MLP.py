@@ -6,6 +6,7 @@
 import numpy as np
 from tensorflow.keras.datasets import mnist
 import os
+from tqdm import tqdm
 
 
 class linear:
@@ -20,12 +21,12 @@ class linear:
         self.x = x
         return np.dot(x, self.weights) + self.bias
 
-    def backward(self, pdvalue, steps, regular):
+    def backward(self, pdvalue, lr, regular):
         self.pdvalue = np.dot(pdvalue, self.weights.T)
         self.pdweights = np.dot(self.x.T, pdvalue)
         self.pdbias = np.sum(pdvalue, axis=0)
-        self.weights -= steps * self.pdweights + regular * self.weights
-        self.bias -= steps * self.pdbias + regular * self.bias
+        self.weights -= lr * self.pdweights + regular * self.weights
+        self.bias -= lr * self.pdbias + regular * self.bias
         return self.pdvalue
 
 
@@ -85,8 +86,8 @@ class midLayer:
         self.x = x
         return self.activator.forward(self.linear.forward(x))
 
-    def backward(self, pdvalue, steps, regualr):
-        return self.linear.backward(self.activator.backward(pdvalue), steps, regualr)
+    def backward(self, pdvalue, lr, regualr):
+        return self.linear.backward(self.activator.backward(pdvalue), lr, regualr)
 
 
 def softmax(x):
@@ -110,7 +111,7 @@ class outputLayer:
         self.x = x
         return self.func(x)
 
-    def backward(self, y_true, steps=None, regular=None):
+    def backward(self, y_true, lr=None, regular=None):
         y_pred = softmax(self.x)
         batch_size = y_true.shape[0]
         return (y_pred - y_true) / batch_size
@@ -138,6 +139,7 @@ class MLP:
         self.tail = outputLayer(tp[-1])
         current.next = self.tail
         self.tail.pre = current
+        self.previous_ac = 0
 
     def forward(self, x):
         current = self.head
@@ -146,10 +148,10 @@ class MLP:
             current = current.next
         return x
 
-    def backward(self, x, steps, regular):
+    def backward(self, x, lr, regular):
         current = self.tail
         while current:
-            x = current.backward(x, steps, regular)
+            x = current.backward(x, lr, regular)
             current = current.pre
         return x
 
@@ -160,11 +162,12 @@ class MLP:
         batch_size,
         num_samples,
         epoch,
-        steps,
+        lr,
         regular=0.0005,
         losstype='computeLoss',
+        lr_descent_rate = 1.25
     ):
-        self.steps = steps
+        self.lr = lr
         self.regualr = regular
         datax = np.array(datax)
         datay = np.array(datay)
@@ -173,15 +176,22 @@ class MLP:
             permutation = np.random.permutation(num_samples)
             datax_shuffled = datax[permutation]
             datay_shuffled = datay[permutation]
-            for i in range(0, len(datax), batch_size):
+            for i in tqdm(range(0, len(datax), batch_size)):
                 x = datax_shuffled[i : i + batch_size]
                 y = datay_shuffled[i : i + batch_size]
                 y_pred = self.forward(x)
                 if losstype == 'computeLoss':
                     loss = computeLoss(y, y_pred)
                     epochloss += loss * x.shape[0]
-                self.backward(y, self.steps, self.regualr)
-            print(f'Epoch {e+1}/{epoch} | Loss: {epochloss/num_samples:.4f}')
+                self.backward(y, self.lr, self.regualr)
+            print(f'Epoch {e+1}/{epoch} | lr:{self.lr:.4f} | Loss: {epochloss/num_samples:.4f}', end = ' ')
+            y_test_pred = self.forward(x_test)
+            y_test_labels = np.argmax(y_test_pred, axis=1)
+            accuracy = np.mean(y_test_labels == y_test)
+            print(f'| accuracy：{accuracy * 100:.2f}%')
+            if accuracy < self.previous_ac:
+                self.lr /= lr_descent_rate
+            self.previous_ac = accuracy
 
     def save(self, filename):
         module_dir = os.path.dirname(os.path.abspath(__file__))
@@ -240,7 +250,7 @@ if __name__ == '__main__':
     mlp = MLP(784, 10, [128, 64], ['relu', 'relu', 'linear', 'softmax'])
 
     batch_size = 64
-    epochs = 10
+    epochs = 15
     learning_rate = 0.1
     num_samples = x_train.shape[0]
     regular = 0.00005

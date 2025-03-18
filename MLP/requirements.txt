@@ -1,5 +1,6 @@
-numpy>=1.21.0
-matplotlib>=3.5.0
-ipywidgets>=7.6.5
-tensorflow>=2.6.0
-jupyter>=1.0.0
+numpy
+matplotlib
+ipywidgets
+tensorflow
+jupyter
+tqdm
