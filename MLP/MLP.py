@@ -1,8 +1,12 @@
 # -*-coding:utf-8-*-
+'''
+@ author: Zhuiy
+'''
 
 import numpy as np
 from tensorflow.keras.datasets import mnist
 import os
+from tqdm import tqdm
 
 
 class linear:
@@ -17,12 +21,12 @@ class linear:
         self.x = x
         return np.dot(x, self.weights) + self.bias
 
-    def backward(self, pdvalue, steps, regular):
+    def backward(self, pdvalue, lr, regular):
         self.pdvalue = np.dot(pdvalue, self.weights.T)
         self.pdweights = np.dot(self.x.T, pdvalue)
         self.pdbias = np.sum(pdvalue, axis=0)
-        self.weights -= steps * self.pdweights + regular * self.weights
-        self.bias -= steps * self.pdbias + regular * self.bias
+        self.weights -= lr * self.pdweights + regular * self.weights
+        self.bias -= lr * self.pdbias + regular * self.bias
         return self.pdvalue
 
 
@@ -30,38 +34,42 @@ def relu(x):
     return np.maximum(0, x)
 
 
+def relupd(x):
+    return np.where(x <= 0, 0, 1)
+
+
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
 
+def sigmoidpd(x):
+    return sigmoid(x) * (1 - sigmoid(x))
+
+
 class activator:
+    Atype = {'relu': relu, 'sigmoid': sigmoid, 'linear': (lambda x: x)}
+
+    Apdtype = {'relu': relupd, 'sigmoid': sigmoidpd, 'linear': lambda x: 1}
 
     def __init__(self, tp='relu'):
         self.type = tp
         self.next = None
         self.pre = None
-
-    def func(self, x):
-        if self.type == 'relu':
-            return relu(x)
-        if self.type == 'sigmoid':
-            return sigmoid(x)
-        if self.type == 'linear':
-            return x
-
-    def pd(self, x):
-        if self.type == 'relu':
-            return np.where(x > 0, 1, 0)
-        if self.type == 'sigmoid':
-            return sigmoid(x) * (1 - sigmoid(x))
-        if self.type == 'linear':
-            return np.ones_like(x)
+        self.func = self.Atype[self.type]
+        self.pd = self.Apdtype[self.type]
 
     def forward(self, x):
         self.x = x
-        return self.func(x)
+        self.sigmoidx = None
+        k = self.func(x)
+        if self.type == 'sigmoid':
+            self.sigmoidx = k
+        return k
 
     def backward(self, pdvalue):
+        if self.type == 'sigmoid':
+            self.pdvalue = pdvalue * self.sigmoidx * (1 - self.sigmoidx)
+            return self.pdvalue
         self.pdvalue = pdvalue * self.pd(self.x)
         return self.pdvalue
 
@@ -78,8 +86,8 @@ class midLayer:
         self.x = x
         return self.activator.forward(self.linear.forward(x))
 
-    def backward(self, pdvalue, steps, regualr):
-        return self.linear.backward(self.activator.backward(pdvalue), steps, regualr)
+    def backward(self, pdvalue, lr, regualr):
+        return self.linear.backward(self.activator.backward(pdvalue), lr, regualr)
 
 
 def softmax(x):
@@ -89,21 +97,21 @@ def softmax(x):
 
 
 class outputLayer:
+    Otype = {'softmax': softmax}
 
+    # Opdtype = {'softmax' : softmaxpd} 因为本项目只是用softmax + computeloss输出，所以可以联合计算梯度，故不再细分类
     def __init__(self, tp='softmax'):
         self.next = None
         self.pre = None
         self.type = tp
-
-    def func(self, x):
-        if self.type == 'softmax':
-            return softmax(x)
+        self.func = self.Otype[self.type]
+        # self.pd = self.Opdtype[self.type]
 
     def forward(self, x):
         self.x = x
         return self.func(x)
 
-    def backward(self, y_true, steps=None, regular=None):
+    def backward(self, y_true, lr=None, regular=None):
         y_pred = softmax(self.x)
         batch_size = y_true.shape[0]
         return (y_pred - y_true) / batch_size
@@ -131,6 +139,7 @@ class MLP:
         self.tail = outputLayer(tp[-1])
         current.next = self.tail
         self.tail.pre = current
+        self.previous_ac = 0
 
     def forward(self, x):
         current = self.head
@@ -139,10 +148,10 @@ class MLP:
             current = current.next
         return x
 
-    def backward(self, x, steps, regular):
+    def backward(self, x, lr, regular):
         current = self.tail
         while current:
-            x = current.backward(x, steps, regular)
+            x = current.backward(x, lr, regular)
             current = current.pre
         return x
 
@@ -153,11 +162,12 @@ class MLP:
         batch_size,
         num_samples,
         epoch,
-        steps,
+        lr,
         regular=0.0005,
         losstype='computeLoss',
+        lr_descent_rate = 1.25
     ):
-        self.steps = steps
+        self.lr = lr
         self.regualr = regular
         datax = np.array(datax)
         datay = np.array(datay)
@@ -166,15 +176,22 @@ class MLP:
             permutation = np.random.permutation(num_samples)
             datax_shuffled = datax[permutation]
             datay_shuffled = datay[permutation]
-            for i in range(0, len(datax), batch_size):
+            for i in tqdm(range(0, len(datax), batch_size)):
                 x = datax_shuffled[i : i + batch_size]
                 y = datay_shuffled[i : i + batch_size]
                 y_pred = self.forward(x)
                 if losstype == 'computeLoss':
                     loss = computeLoss(y, y_pred)
                     epochloss += loss * x.shape[0]
-                self.backward(y, self.steps, self.regualr)
-            print(f'Epoch {e+1}/{epoch} | Loss: {epochloss/num_samples:.4f}')
+                self.backward(y, self.lr, self.regualr)
+            print(f'Epoch {e+1}/{epoch} | lr:{self.lr:.4f} | Loss: {epochloss/num_samples:.4f}', end = ' ')
+            y_test_pred = self.forward(x_test)
+            y_test_labels = np.argmax(y_test_pred, axis=1)
+            accuracy = np.mean(y_test_labels == y_test)
+            print(f'| accuracy：{accuracy * 100:.2f}%')
+            if accuracy < self.previous_ac:
+                self.lr /= lr_descent_rate
+            self.previous_ac = accuracy
 
     def save(self, filename):
         module_dir = os.path.dirname(os.path.abspath(__file__))
@@ -233,7 +250,7 @@ if __name__ == '__main__':
     mlp = MLP(784, 10, [128, 64], ['relu', 'relu', 'linear', 'softmax'])
 
     batch_size = 64
-    epochs = 10
+    epochs = 15
     learning_rate = 0.1
     num_samples = x_train.shape[0]
     regular = 0.00005
