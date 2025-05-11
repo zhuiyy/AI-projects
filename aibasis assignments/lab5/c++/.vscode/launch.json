@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run C++",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${fileDirname}/${fileBasenameNoExtension}.out", // 自动匹配可执行文件路径
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${fileDirname}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "miDebuggerPath": "/usr/bin/gdb", // Windows 需改为 "C:/MinGW/bin/gdb.exe"
+      "preLaunchTask": "Build C++"      // 必须与 tasks.json 中的 label 一致
+    }
+  ]
+}
